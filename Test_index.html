@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>정선군 관광 소비 분산 플랫폼 | 바이브 four you</title>
+
+<!-- Tailwind CSS (CDN) -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          forest:   { DEFAULT: '#1B3B2F', 700: '#14302A', 600: '#1B3B2F', 500: '#254A3B', 100: '#E4EBE4' },
+          cream:    { DEFAULT: '#F6F3EC', 200: '#EFEBDF', 100: '#F6F3EC' },
+          gold:     { DEFAULT: '#C89B3C', 600: '#B08429', 100: '#F4E9CC' },
+          ink:      '#22271F',
+          signal: { red: '#C1442D', amber: '#DE9B33', green: '#4C8B5A' }
+        },
+        fontFamily: {
+          serifkr: ['"Noto Serif KR"', 'serif'],
+          body: ['"Pretendard"', '"Noto Sans KR"', 'sans-serif'],
+          mono: ['"JetBrains Mono"', 'monospace'],
+        },
+      }
+    }
+  }
+</script>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  body { font-family: 'Pretendard', 'Noto Sans KR', sans-serif; background: #F6F3EC; color:#22271F; }
+  .font-serifkr { font-family: 'Noto Serif KR', serif; }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* thin engraved rule, used as a signature texture element */
+  .rule-engrave {
+    height: 2px;
+    background: linear-gradient(to right, rgba(27,59,47,0) 0%, rgba(27,59,47,0.35) 15%, rgba(27,59,47,0.35) 85%, rgba(27,59,47,0) 100%);
+  }
+
+  #map { height: 100%; width: 100%; }
+  .leaflet-popup-content-wrapper { border-radius: 10px; font-family: 'Pretendard', sans-serif; }
+  .leaflet-popup-content { margin: 12px 14px; }
+
+  /* custom flag-pin marker */
+  .pin-wrap { position: relative; width: 30px; height: 40px; }
+  .pin-body { position:absolute; top:0; left:0; width:30px; height:30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 2px 5px rgba(0,0,0,.35); border: 2px solid #F6F3EC; }
+  .pin-dot { position:absolute; top:8px; left:8px; width:14px; height:14px; border-radius:50%; background:#F6F3EC; }
+
+  /* card select ring */
+  .card-active { box-shadow: 0 0 0 2px #C89B3C inset; }
+
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: #cfc7ae; border-radius: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* segmented control */
+  .seg-btn { transition: all .15s ease; }
+  .seg-btn.active { background:#1B3B2F; color:#F6F3EC; }
+
+  /* modal wooden trail-sign styling */
+  .signboard {
+    background: repeating-linear-gradient(180deg, #F6F3EC 0px, #F6F3EC 3px, #EFEBDF 3px, #EFEBDF 4px), #F6F3EC;
+    border: 3px solid #1B3B2F;
+  }
+  .signboard::before {
+    content: '';
+    position: absolute;
+    top: -14px; left: 50%; transform: translateX(-50%);
+    width: 46px; height: 14px;
+    background: #6b5637;
+    border-radius: 4px 4px 0 0;
+  }
+
+  @keyframes pop-in { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  .animate-pop { animation: pop-in .18s ease-out; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-pop { animation: none; }
+  }
+</style>
+</head>
+<body class="min-h-screen">
+
+  <!-- ================= HEADER ================= -->
+  <header class="bg-forest text-cream sticky top-0 z-40 shadow-md">
+    <div class="max-w-7xl mx-auto px-5 md:px-8 py-4 flex items-center justify-between gap-4">
+      <div>
+        <p class="font-mono text-[11px] tracking-[0.25em] text-gold-100/80 uppercase mb-1">Team · 바이브 four you</p>
+        <h1 class="font-serifkr font-bold text-xl md:text-2xl leading-tight">
+          AI 기반 정선군 관광 소비 분산 플랫폼
+        </h1>
+      </div>
+      <div class="hidden sm:flex flex-col items-end font-mono text-[11px] text-cream/70">
+        <span id="clock">--:--:--</span>
+        <span>정선군 · 강원랜드 공공데이터 활용 경진대회</span>
+      </div>
+    </div>
+    <div class="rule-engrave"></div>
+  </header>
+
+  <!-- ================= FILTER BAR ================= -->
+  <div class="bg-cream-200/60 border-b border-forest/10 sticky top-[72px] sm:top-[76px] z-30 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-5 md:px-8 py-3 flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+
+      <div class="flex items-center gap-3">
+        <span class="font-serifkr text-sm font-bold text-forest shrink-0">카지노 입장 SHIFT</span>
+        <div id="shiftControl" class="flex bg-white rounded-full border border-forest/20 p-1 gap-1 text-sm">
+          <button data-shift="전체" class="seg-btn active px-3 py-1.5 rounded-full font-medium">전체</button>
+          <button data-shift="아침" class="seg-btn px-3 py-1.5 rounded-full font-medium">아침 SHIFT</button>
+          <button data-shift="오후" class="seg-btn px-3 py-1.5 rounded-full font-medium">오후 SHIFT</button>
+          <button data-shift="저녁" class="seg-btn px-3 py-1.5 rounded-full font-medium">저녁 SHIFT</button>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <span class="font-serifkr text-sm font-bold text-forest shrink-0">장소 카테고리</span>
+        <div id="categoryControl" class="flex bg-white rounded-full border border-forest/20 p-1 gap-1 text-sm">
+          <button data-cat="전체" class="seg-btn active px-3 py-1.5 rounded-full font-medium">전체</button>
+          <button data-cat="맛집·카페" class="seg-btn px-3 py-1.5 rounded-full font-medium">맛집·카페</button>
+          <button data-cat="전통시장" class="seg-btn px-3 py-1.5 rounded-full font-medium">전통시장</button>
+          <button data-cat="관광지" class="seg-btn px-3 py-1.5 rounded-full font-medium">관광지</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MAIN ================= -->
+  <main class="max-w-7xl mx-auto px-5 md:px-8 py-6 grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-6">
+
+    <!-- LEFT: 추천 카드 리스트 -->
+    <section>
+      <div class="flex items-baseline justify-between mb-3">
+        <h2 class="font-serifkr font-bold text-lg text-forest">맞춤 추천 장소</h2>
+        <span id="resultCount" class="font-mono text-xs text-forest/60">0곳</span>
+      </div>
+      <div id="cardList" class="flex flex-col gap-3 max-h-[70vh] overflow-y-auto pr-1">
+        <!-- cards injected here -->
+      </div>
+    </section>
+
+    <!-- RIGHT: 지도 -->
+    <section class="relative">
+      <div class="rounded-xl overflow-hidden border border-forest/15 shadow-sm h-[70vh] lg:sticky lg:top-[168px]">
+        <div id="map"></div>
+      </div>
+      <!-- legend -->
+      <div class="absolute bottom-4 left-4 z-[500] bg-white/95 backdrop-blur rounded-lg border border-forest/15 px-3 py-2 text-xs font-mono flex gap-3 shadow">
+        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full inline-block" style="background:#C1442D"></span>혼잡</span>
+        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full inline-block" style="background:#DE9B33"></span>보통</span>
+        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full inline-block" style="background:#4C8B5A"></span>여유</span>
+      </div>
+    </section>
+  </main>
+
+  <footer class="max-w-7xl mx-auto px-5 md:px-8 pb-10 pt-2 text-xs text-forest/50 font-mono">
+    ※ 본 화면은 공공데이터 활용 경진대회 제출을 위한 프로토타입이며, 표시된 혼잡도·좌표 데이터는 예시입니다.
+  </footer>
+
+  <!-- ================= 분산 추천 모달 ================= -->
+  <div id="modalOverlay" class="fixed inset-0 bg-ink/50 backdrop-blur-sm z-[1000] hidden items-center justify-center px-5">
+    <div class="signboard relative rounded-lg max-w-md w-full p-6 pt-8 shadow-2xl animate-pop">
+      <p class="font-mono text-xs text-signal-red font-semibold tracking-wide mb-2">⚠️ 혼잡 알림 · 분산 추천</p>
+      <h3 class="font-serifkr font-bold text-lg text-forest mb-3" id="modalSpotName">장소명</h3>
+      <p class="text-sm leading-relaxed text-ink/85 mb-5" id="modalMessage">
+        해당 장소는 현재 혼잡합니다.
+      </p>
+
+      <div id="modalAltBox" class="hidden bg-forest-100/60 border border-forest/15 rounded-md p-3 mb-5">
+        <p class="font-mono text-[11px] text-forest/60 mb-1">대체 추천지</p>
+        <p class="font-serifkr font-bold text-forest" id="modalAltName">-</p>
+        <p class="text-xs text-ink/70 mt-1" id="modalAltDesc"></p>
+      </div>
+
+      <div class="flex gap-2 justify-end">
+        <button id="modalCancel" class="px-4 py-2 rounded-md border border-forest/25 text-forest text-sm font-medium hover:bg-forest/5">아니오</button>
+        <button id="modalConfirm" class="px-4 py-2 rounded-md bg-forest text-cream text-sm font-medium hover:bg-forest-500">이동하기</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ---------- 실시간 시계 (연출용) ----------
+  function tickClock(){
+    const el = document.getElementById('clock');
+    const now = new Date();
+    el.textContent = now.toLocaleTimeString('ko-KR', { hour12:false });
+  }
+  tickClock(); setInterval(tickClock, 1000);
+
+  // ---------- 상태 ----------
+  let ALL_SPOTS = [];
+  let activeShift = '전체';
+  let activeCategory = '전체';
+  let selectedSpotId = null;
+  const markerById = {};
+
+  const congestionColor = { '혼잡':'#C1442D', '보통':'#DE9B33', '여유':'#4C8B5A' };
+  const congestionLabel = { '혼잡':'혼잡', '보통':'보통', '여유':'여유' };
+
+  // ---------- 지도 초기화 ----------
+  const map = L.map('map', { zoomControl: true }).setView([37.32, 128.80], 11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  function makeIcon(congestion, isSelected){
+    const color = congestionColor[congestion] || '#254A3B';
+    return L.divIcon({
+      className: '',
+      html: `
+        <div class="pin-wrap" style="${isSelected ? 'filter:drop-shadow(0 0 6px rgba(200,155,60,.9));' : ''}">
+          <div class="pin-body" style="background:${color};"></div>
+          <div class="pin-dot"></div>
+        </div>`,
+      iconSize: [30,40],
+      iconAnchor: [15,38],
+      popupAnchor: [0,-36],
+    });
+  }
+
+  // ---------- 데이터 직접 내장 (CORS / fetch 에러 차단) ----------
+  ALL_SPOTS = [
+    { "id": "sp01", "name": "정선 아리랑시장", "category": "전통시장", "lat": 37.3806, "lng": 128.6608, "congestion": "혼잡", "hi1PointAvailable": true, "shift": ["아침", "오후"], "desc": "5일장으로 유명한 정선의 대표 전통시장. 콧등치기국수와 곤드레밥이 인기.", "alternativeId": "sp06" },
+    { "id": "sp02", "name": "하이원리조트 하늘길", "category": "관광지", "lat": 37.2306, "lng": 128.9853, "congestion": "여유", "hi1PointAvailable": true, "shift": ["오후", "저녁"], "desc": "고원 능선을 따라 걷는 트레킹 코스. 노을 전망이 뛰어남.", "alternativeId": null },
+    { "id": "sp03", "name": "화암동굴", "category": "관광지", "lat": 37.4381, "lng": 128.7461, "congestion": "보통", "hi1PointAvailable": false, "shift": ["아침", "오후"], "desc": "금광 갱도와 천연 종유동굴이 함께 있는 이색 동굴 관광지.", "alternativeId": null },
+    { "id": "sp04", "name": "몰운대", "category": "관광지", "lat": 37.2764, "lng": 128.8033, "congestion": "여유", "hi1PointAvailable": false, "shift": ["아침", "저녁"], "desc": "기암절벽과 소나무가 어우러진 동강 최고의 전망 포인트.", "alternativeId": null },
+    { "id": "sp05", "name": "삼탄아트마인", "category": "관광지", "lat": 37.2145, "lng": 128.9964, "congestion": "혼잡", "hi1PointAvailable": true, "shift": ["오후", "저녁"], "desc": "폐광을 개조한 복합 예술 공간. 갤러리와 카페, 전시가 공존.", "alternativeId": "sp02" },
+    { "id": "sp06", "name": "동강시스타 유원지", "category": "관광지", "lat": 37.3672, "lng": 128.6733, "congestion": "여유", "hi1PointAvailable": false, "shift": ["아침", "오후", "저녁"], "desc": "래프팅과 캠핑을 즐길 수 있는 동강 변 유원지. 아리랑시장과 도보 15분 거리.", "alternativeId": null },
+    { "id": "sp07", "name": "정선 콧등치기 본가", "category": "맛집·카페", "lat": 37.3799, "lng": 128.6602, "congestion": "혼잡", "hi1PointAvailable": true, "shift": ["아침", "오후", "저녁"], "desc": "메밀 콧등치기국수 원조 맛집. 시장 초입에 위치해 대기줄이 긴 편.", "alternativeId": "sp09" },
+    { "id": "sp08", "name": "고한 하이원 스카이워크 카페", "category": "맛집·카페", "lat": 37.2286, "lng": 128.9877, "congestion": "보통", "hi1PointAvailable": true, "shift": ["오후", "저녁"], "desc": "리조트 인근 전망 카페. 창밖으로 하늘길 능선이 펼쳐짐.", "alternativeId": null },
+    { "id": "sp09", "name": "동강 곤드레밥 마을", "category": "맛집·카페", "lat": 37.3652, "lng": 128.6791, "congestion": "여유", "hi1PointAvailable": false, "shift": ["아침", "오후", "저녁"], "desc": "정선 곤드레밥 정식을 즐길 수 있는 조용한 로컬 식당촌.", "alternativeId": null },
+    { "id": "sp10", "name": "정선 레일바이크", "category": "관광지", "lat": 37.3831, "lng": 128.6437, "congestion": "보통", "hi1PointAvailable": false, "shift": ["아침", "오후"], "desc": "구절리역에서 아우라지역까지 이어지는 인기 레일바이크 코스.", "alternativeId": null },
+    { "id": "sp11", "name": "사북 탄광문화체험 카페", "category": "맛집·카페", "lat": 37.2477, "lng": 128.9611, "congestion": "혼잡", "hi1PointAvailable": true, "shift": ["오후", "저녁"], "desc": "탄광촌 감성의 테마 카페. 카지노 방문객 도보 접근성이 좋아 혼잡.", "alternativeId": "sp08" },
+    { "id": "sp12", "name": "고한 전통시장", "category": "전통시장", "lat": 37.2409, "lng": 128.9698, "congestion": "보통", "hi1PointAvailable": true, "shift": ["아침", "오후"], "desc": "하이원리조트에서 가까운 소규모 상설시장. 순대와 부침개가 유명.", "alternativeId": null }
+  ];
+
+  // 최초 초기화
+  renderAll();
+
+  // ---------- 필터링 ----------
+  function getFiltered(){
+    return ALL_SPOTS.filter(s => {
+      const shiftOk = activeShift === '전체' || (s.shift || []).includes(activeShift);
+      const catOk = activeCategory === '전체' || s.category === activeCategory;
+      return shiftOk && catOk;
+    });
+  }
+
+  // ---------- 렌더링 ----------
+  function renderAll(){
+    const filtered = getFiltered();
+    renderCards(filtered);
+    renderMarkers(filtered);
+    document.getElementById('resultCount').textContent = `${filtered.length}곳`;
+  }
+
+  function badgeHi1(available){
+    return available
+      ? `<span class="inline-flex items-center gap-1 bg-gold-100 text-gold-600 text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full border border-gold/40">하이원포인트 사용가능</span>`
+      : `<span class="inline-flex items-center gap-1 bg-forest/5 text-forest/40 text-[11px] font-mono px-2 py-0.5 rounded-full border border-forest/10">포인트 미사용처</span>`;
+  }
+
+  function congestionTag(congestion){
+    const color = congestionColor[congestion];
+    return `
+      <span class="inline-flex items-center gap-1.5 text-xs font-semibold" style="color:${color}">
+        <span class="flex gap-0.5">
+          <span class="w-1.5 h-1.5 rounded-full" style="background:${congestion==='혼잡'?color:'#e5e0d2'}"></span>
+          <span class="w-1.5 h-1.5 rounded-full" style="background:${congestion==='보통'?color:'#e5e0d2'}"></span>
+          <span class="w-1.5 h-1.5 rounded-full" style="background:${congestion==='여유'?color:'#e5e0d2'}"></span>
+        </span>
+        ${congestionLabel[congestion]}
+      </span>`;
+  }
+
+  function renderCards(spots){
+    const list = document.getElementById('cardList');
+    if(spots.length === 0){
+      list.innerHTML = `<div class="text-sm text-forest/50 bg-white border border-forest/10 rounded-lg p-6 text-center">조건에 맞는 장소가 없습니다.</div>`;
+      return;
+    }
+    list.innerHTML = spots.map(s => `
+      <button data-id="${s.id}" class="card-item text-left bg-white border border-forest/10 rounded-lg p-4 hover:border-gold/50 hover:shadow-md transition ${selectedSpotId===s.id?'card-active':''}">
+        <div class="flex items-start justify-between gap-2 mb-1.5">
+          <h3 class="font-serifkr font-bold text-forest text-[15px] leading-snug">${s.name}</h3>
+          ${congestionTag(s.congestion)}
+        </div>
+        <p class="text-xs text-ink/60 mb-2 font-mono">${s.category} · SHIFT: ${(s.shift||[]).join('/')}</p>
+        <p class="text-sm text-ink/75 leading-relaxed mb-3">${s.desc || ''}</p>
+        ${badgeHi1(s.hi1PointAvailable)}
+      </button>
+    `).join('');
+
+    list.querySelectorAll('.card-item').forEach(btn => {
+      btn.addEventListener('click', () => handleSpotSelect(btn.dataset.id));
+    });
+  }
+
+  function renderMarkers(spots){
+    Object.values(markerById).forEach(m => map.removeLayer(m));
+    Object.keys(markerById).forEach(k => delete markerById[k]);
+
+    spots.forEach(s => {
+      const marker = L.marker([s.lat, s.lng], { icon: makeIcon(s.congestion, s.id===selectedSpotId) }).addTo(map);
+      marker.bindPopup(`
+        <div class="font-body">
+          <p style="font-weight:700;color:#1B3B2F;margin-bottom:2px;">${s.name}</p>
+          <p style="font-size:11px;color:#666;margin-bottom:6px;">${s.category} · 혼잡도 ${s.congestion}</p>
+          <p style="font-size:12px;color:#333;">${s.desc||''}</p>
+        </div>
+      `);
+      marker.on('click', () => handleSpotSelect(s.id));
+      markerById[s.id] = marker;
+    });
+  }
+
+  // ---------- 선택 & 분산 추천 로직 ----------
+  function handleSpotSelect(id){
+    selectedSpotId = id;
+    const spot = ALL_SPOTS.find(s => s.id === id);
+    if(!spot) return;
+
+    renderCards(getFiltered());
+    renderMarkers(getFiltered());
+
+    const marker = markerById[id];
+    if(marker){
+      map.flyTo([spot.lat, spot.lng], 14, { duration: 0.6 });
+      marker.openPopup();
+    }
+
+    if(spot.congestion === '혼잡'){
+      showCongestionModal(spot);
+    }
+  }
+
+  function showCongestionModal(spot){
+    const overlay = document.getElementById('modalOverlay');
+    const alt = ALL_SPOTS.find(s => s.id === spot.alternativeId);
+
+    document.getElementById('modalSpotName').textContent = spot.name;
+    document.getElementById('modalMessage').innerHTML =
+      `⚠️ <strong>${spot.name}</strong>은(는) 현재 <strong style="color:#C1442D">혼잡</strong> 상태입니다.<br/>
+       인근의 여유로운 대체 소비처·관광지로 이동하시겠습니까?`;
+
+    const altBox = document.getElementById('modalAltBox');
+    const confirmBtn = document.getElementById('modalConfirm');
+
+    if(alt){
+      altBox.classList.remove('hidden');
+      document.getElementById('modalAltName').textContent = `${alt.name} (${congestionLabel[alt.congestion]})`;
+      document.getElementById('modalAltDesc').textContent = alt.desc || '';
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = '이동하기';
+    } else {
+      altBox.classList.add('hidden');
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = '대체지 없음';
+    }
+
+    overlay.classList.remove('hidden');
+    overlay.classList.add('flex');
+
+    confirmBtn.onclick = () => {
+      overlay.classList.add('hidden');
+      overlay.classList.remove('flex');
+      if(alt) handleSpotSelect(alt.id);
+    };
+  }
+
+  document.getElementById('modalCancel').addEventListener('click', () => {
+    const overlay = document.getElementById('modalOverlay');
+    overlay.classList.add('hidden');
+    overlay.classList.remove('flex');
+  });
+  document.getElementById('modalOverlay').addEventListener('click', (e) => {
+    if(e.target.id === 'modalOverlay'){
+      e.currentTarget.classList.add('hidden');
+      e.currentTarget.classList.remove('flex');
+    }
+  });
+
+  // ---------- 필터 컨트롤 이벤트 ----------
+  document.getElementById('shiftControl').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-shift]');
+    if(!btn) return;
+    document.querySelectorAll('#shiftControl .seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeShift = btn.dataset.shift;
+    renderAll();
+  });
+
+  document.getElementById('categoryControl').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-cat]');
+    if(!btn) return;
+    document.querySelectorAll('#categoryControl .seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeCategory = btn.dataset.cat;
+    renderAll();
+  });
+</script>
+</body>
+</html>
